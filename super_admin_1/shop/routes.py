@@ -84,7 +84,7 @@ def get_shops(user_id : UUID) -> dict:
 
     try:
         if status and search:
-            shops = Shop.query.filter(
+            shops: list[Shop] = Shop.query.filter(
                 Shop.name.ilike(f'%{search}%'),
                 Shop.admin_status.in_(admin_status[status]),
                 getattr(Shop, status_enum[status]).in_(statuses[status])
@@ -157,7 +157,7 @@ def get_shops(user_id : UUID) -> dict:
                 "total_deleted_shops": deleted_shops,
                 "total_pages": int(total_no_of_pages)
                 }
-                ), 200
+        ), 200
     except Exception as e:
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 

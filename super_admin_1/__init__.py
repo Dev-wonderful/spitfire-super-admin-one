@@ -27,7 +27,9 @@ def create_app():
 
     app = Flask(__name__)
     app.config.from_object(App_Config)
-    if app.config["SQLALCHEMY_DATABASE_URI"]:
+    if app.config["SQLALCHEMY_DATABASE_URI"] == "sqlite:///test.db":
+        print("using test db")
+    else:
         print("using db")
 
     # Initialize CORS
@@ -45,6 +47,9 @@ def create_app():
     
     # Initialize SQLAlchemy
     db.init_app(app)
+
+    from super_admin_1.models.product import Product
+    from super_admin_1.models.shop import Shop
 
     # imports blueprints
     from super_admin_1.shop.routes import shop
