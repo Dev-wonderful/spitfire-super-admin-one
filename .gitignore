@@ -162,3 +162,5 @@ cython_debug/
 test*.py
 .idea
 admin_actions_2023_10_09.txt
+pipfile*
+*.db

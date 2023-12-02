@@ -7,45 +7,45 @@ from super_admin_1.logs.product_action_logger import (
     register_action_d,
     logger,
 )
-from utils import admin_required, image_gen, vendor_profile_image
+from utils import admin_required, image_gen, vendor_profile_image, check_product_status, sort_product_by_top_sales, total_product_count
 from super_admin_1.notification.notification_helper import notify
 from super_admin_1.products.product_schemas import IdSchema
-from pydantic import ValidationError
-from super_admin_1.logs.product_action_logger import register_action_d, logger
-from utils import raise_validation_error
-from super_admin_1 import cache
+from uuid import UUID
+from typing import Dict, List
+from datetime import datetime
 
 
-product = Blueprint("product", __name__, url_prefix="/api/admin/product")
+product = Blueprint("product", __name__, url_prefix="/api/v1/admin/products")
 
-# WORKS #TESTED AND DOCUMENTED
 @product.route("/all", methods=["GET"])
-@cache.cached(timeout=5)
 @admin_required(request=request)
-def get_products(user_id):
+def get_products(user_id : UUID) -> dict:
     """
-    Retrieves information about products from the database based on different filters such as search and status.
-    Calculates the total number of products, deleted products, and sanctioned products.
-    Formats the retrieved data and returns it as a JSON response.
+    Get products and their information.
 
     Args:
-        user_id (int): The ID of the user making the request.
+        user_id (UUID): The ID of the user.
 
     Returns:
-        JSON response: A JSON response containing the formatted product data, total product counts, total deleted product counts, total sanctioned product counts, and total number of pages.
+        dict: A dictionary containing the following information:
+            - "message" (str): The message indicating the success of the operation.
+            - "data" (list): A list of dictionaries containing the product information.
+            - "total_products" (int): The total number of products.
+            - "total_deleted_products" (int): The total number of deleted products.
+            - "total_sanctioned_products" (int): The total number of sanctioned products.
+            - "total_pages" (int): The total number of pages.
+
+    Raises:
+        Exception: If there is an internal server error.
+
+    Examples:
+        # Example 1: Get all products
+        get_products(user_id)
+
+        # Example 2: Get products with search and status filters
+        get_products(user_id, search="example", status="sanctioned")
     """
     product_shop_data = []
-
-    def check_product_status(product):
-        if product.admin_status in ["suspended", "blacklisted"]:
-            return "Sanctioned"
-        elif (
-            product.admin_status in ["approved", "pending"]
-            and product.is_deleted == "active"
-        ):
-            return "Active"
-        elif product.is_deleted == "temporary":
-            return "Deleted"
 
     page = request.args.get('page',1 , int)
     search = request.args.get('search',None)
@@ -139,37 +139,120 @@ def get_products(user_id):
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-# to be reviewed #TESTED AND DOCUMENTED
-@product.route("/<product_id>", methods=["GET"])
-@cache.cached(timeout=5)
+@product.route("/pending/all", methods=["GET"])
 @admin_required(request=request)
-def get_product(user_id, product_id):
-    """get information related to a product
+def get_pending_products(user_id : UUID) -> dict:
+    """
+    Get pending products and their information.
 
     Args:
-        product_id (uuid): The unique identifier of the product.
+        user_id (UUID): The ID of the user.
 
-     Returns:
-        dict: A JSON response with the appropriate status code and message.
-            - If the product is returned successfully:
-                - Status code: 200
-                - Body:
-                    - "message": "the product information"
-                    - "data": []
-            - If the product with the given ID does not exist:
-                - Status code: 404
-                - Body:
-                    - "error": "not found"
-                    - "message": "invalid product id"
-            - If an exception occurs during the get process:
-                - Status code: 500
-                - Body:
-                    - "error": "Internal Server Error"
-                    - "message": [error message]
+    Returns:
+        dict: A dictionary containing the following information:
+            - "message" (str): The message indicating the success of the operation.
+            - "data" (list): A list of dictionaries containing the pending product information.
+            - "total_pending_products" (int): The total number of pending products.
+            - "total_pages" (int): The total number of pages.
+
+    Raises:
+        Exception: If there is an internal server error.
+
+    Examples:
+        # Example 1: Get all pending products
+        get_pending_products(user_id)
+
+        # Example 2: Get pending products with search filter
+        get_pending_products(user_id, search="example")
     """
+
+    product_shop_data = []
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search = request.args.get('search', None)
+    #Query pending products with pagination and is_deleted filter
+    products = Product.query.filter(
+        Product.admin_status == 'pending',
+        Product.is_deleted == 'active',  # Filter for products that are not deleted
+        Product.name.ilike(f'%{search}%')) \
+        .order_by(Product.createdAt.desc()) \
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    total_pending_products = products.total
+    total_no_of_pages = products.pages
+
+
+
     try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
+        for product in products.items:
+            # Retrieve shop information for the product
+            shop = Shop.query.filter_by(id=product.shop_id).first()
+            merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
+
+            data = {
+                "product_image": image_gen(product.id),
+                "admin_status": product.admin_status,
+                "category_id": product.category_id,
+                "user_id": product.user_id,
+                "createdAt": product.createdAt,
+                "currency": product.currency,
+                "description": product.description,
+                "discount_price": product.discount_price,
+                "product_id": product.id,
+                "is_deleted": product.is_deleted,
+                "is_published": product.is_published,
+                "product_name": product.name,
+                "price": product.price,
+                "quantity": product.quantity,
+                "rating_id": product.rating_id,
+                "shop_id": product.shop_id,
+                "tax": product.tax,
+                "updatedAt": product.updatedAt,
+                "shop_name": shop.name,
+                "vendor_name": merchant_name,
+                "category_name": product.product_category.name,
+                "sub_category_name": product.product_category.product_sub_categories[0].name if product.product_category.product_sub_categories else ""
+            }
+            product_shop_data.append(data)
+
+        return jsonify({
+            "message": "All Pending products information",
+            "data": product_shop_data,
+            "total_pending_products": total_pending_products,
+            "total_pages": int(total_no_of_pages)
+        }), 200
+    except Exception as e:
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+
+
+@product.route("/<product_id>", methods=["GET"])
+@admin_required(request=request)
+def get_product(user_id : UUID, product_id : UUID) -> dict:
+    """
+    Get product information.
+
+    Args:
+        user_id (UUID): The ID of the user.
+        product_id (UUID): The ID of the product.
+
+    Returns:
+        dict: A dictionary containing the following information:
+            - "message" (str): The message indicating the success of the operation.
+            - "data" (list): A list of dictionaries containing the product information.
+
+    Raises:
+        ValidationError: If there is a validation error.
+        Exception: If there is an internal server error.
+
+    Examples:
+        # Example 1: Get product by ID
+        get_product(user_id, product_id)
+    """
+    product_id = IdSchema(id=product_id).id
+    
+    try:
+        
         product = Product.query.filter_by(id=product_id).first()
 
         product_shop_data = []
@@ -177,7 +260,10 @@ def get_product(user_id, product_id):
         def check_product_status(product):
             if product.admin_status == "suspended":
                 return "Sanctioned"
-            if (product.admin_status == "approved" or product.admin_status == "pending") and product.is_deleted == "active":
+            if (
+                product.admin_status in ["approved"]
+                and product.is_deleted == "active"
+            ):
                 return "Active"
             if product.is_deleted == "temporary":
                 return "Deleted"
@@ -189,7 +275,7 @@ def get_product(user_id, product_id):
         merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
         data = {
             "product_image": image_gen(product.id),
-            "vendor_profile_pic":  vendor_profile_image(shop.merchant_id),    #come back to thisi
+            "vendor_profile_pic":  vendor_profile_image(shop.merchant_id),   
             "admin_status": product.admin_status,
             "category_id": product.category_id,
             "user_id": product.user_id,
@@ -221,32 +307,33 @@ def get_product(user_id, product_id):
                 "data": product_shop_data,
             }
         ), 200
-    except ValidationError as e:
-        raise_validation_error(e)
     except Exception as e:
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-@product.route("/sanction/<product_id>", methods=["PATCH"])
+@product.route("/<product_id>/sanction", methods=["PATCH"])
 @admin_required(request=request)
-def to_sanction_product(user_id, product_id):
-    """sanctions a product by setting their
-    is_deleted attribute  to "temporary"
-    admin_status attribute to "blacklisted"
-    Args:
-        product_id (string)
-    returns:
-        JSON response with status code and message:
-        -success(HTTP 200): product is sanctioned successfully
-        -success(HTTP 200): if the product with provided not marked as sanctioned
-        -failure(HTTP 404): if the product with provided id does not exist
-        -failure(HTTP 500): if there is any server error
+def to_sanction_product(user_id : UUID, product_id : UUID) -> dict:
     """
-    try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
-    except ValidationError as e:
-        raise_validation_error(e)
+        Sanction a product.
+
+        Args:
+            user_id (UUID): The ID of the user.
+            product_id (UUID): The ID of the product to be sanctioned.
+
+        Returns:
+            dict: A dictionary containing the following information:
+                - "data" (dict): A dictionary containing the formatted product information.
+                - "message" (str): The message indicating the success of the sanctioning action.
+
+        Raises:
+            ValidationError: If there is a validation error.
+
+        Examples:
+            # Example 1: Sanction a product
+            to_sanction_product(user_id, product_id)
+        """
+    product_id = IdSchema(id=product_id).id  # Extract and validate the product_id
 
     product = Product.query.filter_by(id=product_id).first()
     if not product:
@@ -287,17 +374,31 @@ def to_sanction_product(user_id, product_id):
     ), 200
 
 
-# WORKS #TESTED AND DOCUMENTED
-@product.route("/product_statistics", methods=["GET"])
+@product.route("/products-statistics", methods=["GET"])
 @admin_required(request=request)
-def get_product_statistics(user_id):
+def get_product_statistics(user_id : UUID) -> dict:
     """
-    Returns statistics about the products, including the total number of all products, the total number of sanctioned
-    products, and the total number of deleted products.
+    Get product statistics.
 
-    :return: A JSON response containing product statistics.
-    :rtype: dict
+    Args:
+        user_id (UUID): The ID of the user.
+
+    Returns:
+        dict: A dictionary containing the following information:
+            - "status" (str): The status indicating the success of the operation.
+            - "product_statistics" (dict): A dictionary containing the product statistics:
+                - "total_products" (int): The total number of products.
+                - "total_sanctioned_products" (int): The total number of sanctioned products.
+                - "total_deleted_products" (int): The total number of deleted products.
+
+    Raises:
+        Exception: If there is a bad request or an error occurs while retrieving the product statistics.
+
+    Examples:
+        # Example 1: Get product statistics
+        get_product_statistics(user_id)
     """
+
     try:
         all_products = Product.query.count()
         sanctioned_products = Product.query.filter_by(
@@ -318,34 +419,35 @@ def get_product_statistics(user_id):
         return jsonify(
             {
                 "error": "Bad request",
-                "message": "Something went wrong while retrieving product statistics: {exc}",
+                "message": f"Something went wrong while retrieving product statistics: {exc}",
             }
         ), 400
 
-# WORKS #TESTED AND DOCUMENTED
-@product.route("/restore_product/<product_id>", methods=["PATCH"])
+@product.route("/<product_id>/restore", methods=["PATCH"])
 @admin_required(request=request)
-def to_restore_product(user_id, product_id):  #FOR TEMPORARILY DELETED PRODUCT
-    """restores a temporarily deleted product by setting their is_deleted
-        attribute from "temporary" to "active"
-    Args:
-        product_id (string)
-    returns:
-        JSON response with status code and message:
-        -success(HTTP 200): product restored successfully
-
-        -success(HTTP 200): if the product with provproduct_ided not marked as deleted
-        -failure(HTTP 404): if the product with provproduct_ided product_id does not exist
-
-        -success(HTTP 200): if the product with provided not marked as deleted
-        -failure(HTTP 404): if the product with provided id does not exist
-
+def to_restore_product(user_id : UUID, product_id : UUID ) -> dict:
     """
-    try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
-    except ValidationError as e:
-        raise_validation_error(e)
+    Restore a temporarily deleted product.
+
+    Args:
+        user_id (UUID): The ID of the user.
+        product_id (UUID): The ID of the product to be restored.
+
+    Returns:
+        dict: A dictionary containing the following information:
+            - "message" (str): The message indicating the success of the restoration.
+            - "data" (dict): A dictionary containing the formatted product information.
+
+    Raises:
+        ValidationError: If there is a validation error.
+        Exception: If there is a bad request or an error occurs while performing the restoration action.
+
+    Examples:
+        # Example 1: Restore a product
+        to_restore_product(user_id, product_id)
+    """
+    product_id = IdSchema(id=product_id)
+    product_id = product_id.id
 
     try:
         product = Product.query.filter_by(id=product_id).first()
@@ -393,34 +495,26 @@ def to_restore_product(user_id, product_id):  #FOR TEMPORARILY DELETED PRODUCT
         ), 400
 
 
-# WORKS #TESTED AND DOCUMENTED
-@product.route("delete_product/<product_id>", methods=["PATCH"])
+@product.route("/<product_id>/soft-delete", methods=["DELETE"])
 @admin_required(request=request)
-def temporary_delete(user_id, product_id):
+def temporary_delete(user_id : UUID, product_id: UUID) -> None:
     """
-    Deletes a product temporarily by updating the 'is_deleted' field of the product in the database to 'temporary'.
-    Logs the action in the product_logs table.
+    Temporarily delete a product.
 
     Args:
-        product_id (str): The product_id of the product to be temporarily deleted.
+        user_id (UUID): The ID of the user.
+        product_id (UUID): The ID of the product to be temporarily deleted.
 
     Returns:
-        dict: A JSON response with the appropriate status code and message.
-            - If the product is successfully temporarily deleted:
-                - Status code: 204
-                - Body:
-                    - "message": "Product temporarily deleted"
-                    - "data": null
-            - If the product with the given product_id does not exist:
-                - Status code: 404
-                - Body:
-                    - "error": "Not Found"
-                    - "message": "Product not found"
-            - If an exception occurs during the logging process:
-                - Status code: 500
-                - Body:
-                    - "error": "Internal Server Error"
-                    - "message": [error message]
+        None
+
+    Raises:
+        ValidationError: If there is a validation error.
+        Exception: If there is an internal server error.
+
+    Examples:
+        # Example 1: Temporarily delete a product
+        temporary_delete(user_id, product_id)
     """
     select_query = """
                         SELECT * FROM public.product
@@ -429,11 +523,8 @@ def temporary_delete(user_id, product_id):
     delete_query = """UPDATE product
                         SET is_deleted = 'temporary'
                         WHERE id = %s;"""
-    try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
-    except ValidationError as e:
-        raise_validation_error(e)
+    
+    product_id = IdSchema(id=product_id).id
     try:
         with Database() as db:
             db.execute(select_query, (product_id,))
@@ -459,7 +550,7 @@ def temporary_delete(user_id, product_id):
                     logger.error(f"{type(error).__name__}: {error}")
 
             try:
-                register_action_d(user_id, f"Temporary Deletion", product_id)
+                register_action_d(user_id, "Temporary Deletion", product_id)
             except Exception as log_error:
                 logger.error(f"{type(log_error).__name__}: {log_error}")
 
@@ -474,30 +565,28 @@ def temporary_delete(user_id, product_id):
         return jsonify({"error": "Internal Server Error", "message": str(error)}), 500
 
 
-# WORKS #TESTED AND DOCUMENTED
-@product.route("approve_product/<product_id>", methods=["PATCH"])
+@product.route("/<product_id>/approve", methods=["PATCH"])
 @admin_required(request=request)
-def approve_product(user_id, product_id):  #FOR SANCTIONED PRODUCTS
+def approve_product(user_id : UUID, product_id : UUID) -> dict:  
     """
-    Approves a product  by updating the 'admin_status' field of the product in the database to 'approved'.
-    Logs the action in the product_logs table.
+    Approve a product.
 
     Args:
-        product_id (uuid): The product_id of the product to be temporarily deleted.
+        user_id (UUID): The ID of the user.
+        product_id (UUID): The ID of the product to be approved.
 
     Returns:
-            - If succed a status code of 204, and NO content.
-            - If the product with the given product_id does not exist:
-                - Status code: 404
-                - Body:
-                    - "error": "Not Found"
-                    - "message": "Product not found"
-            - If an exception occurs during the logging process:
-                - Status code: 500
-                - Body:
-                    - "error": "Internal Server Error"
-                    - "message": [error message]
+        None
+
+    Raises:
+        ValidationError: If there is a validation error.
+        Exception: If there is an internal server error.
+
+    Examples:
+        # Example 1: Approve a product
+        approve_product(user_id, product_id)
     """
+
     select_query = """
                         SELECT * FROM public.product
                         WHERE id=%s;"""
@@ -506,11 +595,8 @@ def approve_product(user_id, product_id):  #FOR SANCTIONED PRODUCTS
                         SET admin_status = 'approved'
                         WHERE id = %s;"""
 
-    try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
-    except ValidationError as e:
-        raise_validation_error(e)
+    product_id = IdSchema(id=product_id)
+    product_id = product_id.id
     try:
         with Database() as db:
             db.execute(select_query, (product_id,))
@@ -567,35 +653,36 @@ def approve_product(user_id, product_id):  #FOR SANCTIONED PRODUCTS
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-# WORKS #TESTED AND DOCUMENTED
-@product.route("delete_product/<product_id>", methods=["DELETE"])
+@product.route("/<product_id>", methods=["DELETE"])
 @admin_required(request=request)
-def permanent_delete(user_id, product_id):
+def permanent_delete(user_id : UUID, product_id : UUID) -> None:
     """
-    Deletes a product permanently from the database.
+        Permanently delete a product.
 
-    Args:
-        user_id (uuid): The ID of the user performing the deletion.
-        product_id (uuid): The UUID of the product to be deleted.
+        Args:
+            user_id (UUID): The ID of the user.
+            product_id (UUID): The ID of the product to be permanently deleted.
 
-    Returns:
-         response indicating the success status code of 204 with NO Content or failure of the deletion.
-        If the `product_id` is not a valid UUID, return a JSON response with a "Bad Request" error and a message indicating the unsupported data type.
-        If the product is not found in the database, return a JSON response with a "Not Found" error and a message indicating that the product was not found.
-        If there is an error while executing the DELETE query or logging the action, return a JSON response with a "Server Error" error and a message indicating the error.
-        If the deletion is successful, return a JSON response with a "Product permanently deleted" message and a null data field.
+        Returns:
+            None
+
+        Raises:
+            ValidationError: If there is a validation error.
+            Exception: If there is an internal server error.
+
+        Examples:
+            # Example 1: Permanently delete a product
+            permanent_delete(user_id, product_id)
     """
+
     select_query = """
                         SELECT id FROM public.product
                         WHERE id =%s;"""
     delete_query = """DELETE FROM public.product 
                                 WHERE id = %s; """
 
-    try:
-        product_id = IdSchema(id=product_id)
-        product_id = product_id.id
-    except ValidationError as e:
-        raise_validation_error(e)
+    product_id = IdSchema(id=product_id)
+    product_id = product_id.id
     try:            
         with Database() as db:
             db.execute(select_query, (product_id,))
@@ -622,62 +709,92 @@ def permanent_delete(user_id, product_id):
             }
         ), 500
 
-
-
-
-# Define a route to get all temporarily deleted products
-
-# WORKS #TESTED AND DOCUMENTED
-@product.route("/temporarily_deleted_products", methods=["GET"], strict_slashes=False)
+@product.route("/all/filters", methods=["GET"])
 @admin_required(request=request)
-def get_temporarily_deleted_products(user_id):
+def to_filters(user_id: UUID) -> List[Dict[str, str]]:
+    """An endpoint to filter the products based on certain query params
+
+    Args:
+        user_id (string): id of the logged in user
     """
-    Retrieve temporarily deleted products.
-    This endpoint allows super admin users to retrieve a list of products that have been temporarily deleted.
-    Returns:
-        JSON response with status and message:
-        - Success (HTTP 200): A list of temporarily deleted products and their details.
-        - Success (HTTP 200): A message indicating that no products have been temporarily deleted.
-        - Error (HTTP 500): If an error occurs during the retrieving process.
-    Permissions:
-        - Only accessible to super admin users.
-    Note:
-        - The list includes the details of products that have been temporarily deleted.
-        - If no products have been temporarily deleted, a success message is returned.
-    """
-    try:
-        # Query the database for all temporarily_deleted_products
-        temporarily_deleted_products = Product.query.filter_by(
-            is_deleted="temporary"
-        ).all()
+    filters = ["newest", "oldest", "status"]
+    filter = request.args.get("filter", None, str)
+    page = request.args.get("page", 1, int)
 
-        # Calculate the total count of temporarily deleted products
-        total_count = len(temporarily_deleted_products)
-
-        # Check if no products have been temporarily deleted
-        if not temporarily_deleted_products:
-            return jsonify(
-                {
-                    "message": "No products have been temporarily deleted, Yet!",
-                    "data": total_count,
-                }
-            ), 200
-
-        # Create a list with Product details
-        products_list = [product.format()
-                         for product in temporarily_deleted_products]
-
-        # Return the list with all attributes of the temporarily_deleted_products
+    if filter is None or filter not in filters:
         return jsonify(
             {
-                "message": "All temporarily deleted products retrieved successfully",
-                "data": {
-                    "temporarily_deleted_products": products_list,
-                    "count": total_count,
-                }
+                "message": "Bad Request",
+                "error": "You need to pass in a filter"
             }
+        ), 400
+    try:
+        if filter == "newest":
+            products = Product.query.order_by(Product.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
+            filter_params = 'newest'
+        elif filter == "status":
+            products = sort_product_by_top_sales(page=page, status=True)
+            total_products_count = total_product_count(status=True)
+            filter_params = "status"
+        elif filter == "oldest":
+            products = Product.query.order_by(Product.createdAt.asc()).paginate(page=page, per_page=10, error_out=False)
+            filter_params = "oldest"
+        data = []
+
+    except Exception as error:
+        return jsonify({
+            "message": "Bad Request",
+            "error": f"{error} is not recognized"
+        })
+
+    # I know there's a better way to get number of pages but for the sake of the
+    # sort_by_top_sales function which returns a list, I had to do it this way
+    if isinstance(products, list):
+        total_products = total_products_count
+        total_no_of_pages = total_products / 10
+        total_remainder = total_products % 10
+        if total_remainder > 0:
+            total_no_of_pages += 1
+    else:
+        total_products = Product.query.count()
+        total_no_of_pages = products.pages
+    sanctioned_products = Product.query.filter(Product.admin_status == 'suspended').count()
+    deleted_products = Product.query.filter_by(is_deleted="temporary").count()
+
+    try:
+        for product in products:
+            product_data = {
+                "product_id": product.id,
+                "product_name": product.name,
+                "is_deleted": product.is_deleted,
+                "updatedAt": product.updatedAt,
+                "product_status": check_product_status(product),
+                "product_image": image_gen(product.id),
+                "admin_status": product.admin_status,
+                "category_id": product.category_id,
+                "user_id": product.user_id,
+                "createdAt": product.createdAt,
+                "currency": product.currency,
+                "description": product.description,
+                "discount_price": product.discount_price,
+                "is_published": product.is_published,
+                "price": product.price,
+                "quantity": product.quantity,
+                "rating_id": product.rating_id,
+                "shop_id": product.shop_id,
+                "tax": product.tax
+            }
+            data.append(product_data)
+        return jsonify(
+            {
+                "message": "All products information by {}".format(filter_params),
+                "data": data,
+                "total_products": total_products,
+                "total_sanctioned_products": sanctioned_products,
+                "total_deleted_products": deleted_products,
+                "total_pages": int(total_no_of_pages),
+                "date_requested": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
         ), 200
     except Exception as e:
-        # Handle any exceptions that may occur during the retrieving process
-        return jsonify({"status": "Error", "message": str(e)})
-
+        return jsonify({"error": "Internal Server Error", "message": str(e.__doc__)}), 500

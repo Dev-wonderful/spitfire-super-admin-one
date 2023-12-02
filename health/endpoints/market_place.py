@@ -1,13 +1,16 @@
-BASE_URL = "https://coral-app-8bk8j.ondigitalocean.app/api"
+from datetime import datetime
+
+from health import USER_ID
+
+BASE_URL = "https://coral-app-8bk8j.ondigitalocean.app/api/marketplace/v1/"
 NAME = "Market Place"
 
-USER_ID = ""
-PRODUCT_ID = ""
+PRODUCT_ID = "04fa1d08-1ade-40a9-9f09-d2f4bdd1d72b"
 PRODUCT_INTERACTION = {
     "interaction_type": "view",
-    "user": "",
-    "product": "",
-    "created_at": "",
+    "user": USER_ID,
+    "product": PRODUCT_ID,
+    "created_at": datetime.now().isoformat(),
 }
 
 ENDPOINTS_CONFIG = [
@@ -28,11 +31,7 @@ ENDPOINTS_CONFIG = [
         "method": "GET",
         "auth_required": True,
     },
-    {
-        "url": "/categoryNames/",
-        "method": "GET",
-        "auth_required": True,
-    },
+
     {
         "url": "/getproduct/{product_id}/{user_id}/",
         "method": "GET",
@@ -63,9 +62,6 @@ ENDPOINTS_CONFIG = [
     {
         "url": "/product-retrieval/",
         "method": "GET",
-        "query_params": {
-
-        },
     },
     {
         "url": "/products-filter/",
@@ -78,6 +74,14 @@ ENDPOINTS_CONFIG = [
             "sorting_option": "price"
         },
     },
+
+    {
+        "url": "/product/category/{categoryName}/",
+        "method": "GET",
+        "path_params": {"categoryName": "Health & Fitness"},
+        "auth_required": True,
+    },
+
     {
         "url": "/products/limited_offers/",
         "method": "GET",
@@ -86,15 +90,15 @@ ENDPOINTS_CONFIG = [
         "url": "/products/{category}",
         "method": "GET",
         "path_params": {
-            "category": "electronics"
+            "category": "Health & Fitness"
         },
     },
     {
         "url": "/products/{category}/{subcategory}/",
         "method": "GET",
         "path_params": {
-            "category": "electronics",
-            "subcategory": "laptops"
+            "category": "Health & Fitness",
+            "subcategory": "Fitness Training"
         },
     },
     {
@@ -137,7 +141,7 @@ ENDPOINTS_CONFIG = [
     },
     
     {
-        "url": "/wishlist/delete/{user_id}/{product_id}/",
+        "url": "/wishlist/{user_id}/{product_id}/",
         "method": "DELETE",
         "path_params": {
             "user_id": USER_ID,

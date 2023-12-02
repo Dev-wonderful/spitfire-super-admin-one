@@ -1,6 +1,7 @@
 import psycopg2
 import os
 from dotenv import load_dotenv
+import sqlite3
 
 load_dotenv(".env")
 
@@ -15,14 +16,18 @@ class Database:
         self.port = os.environ.get("DB_PORT")
 
     def __enter__(self):
-        self.connection = psycopg2.connect(
-            dbname=self.dbname,
-            user=self.user,
-            password=self.password,
-            host=self.host,
-            port=self.port,
-            sslmode = "require"
-        )
+        if self.host:
+            self.connection = psycopg2.connect(
+                dbname=self.dbname,
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                sslmode = "require"
+            )
+        else:
+            self.connection = sqlite3.connect("test.db")
+
         self.cursor = self.connection.cursor()
         return self.cursor
 
