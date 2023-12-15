@@ -10,7 +10,7 @@ class ProductLogs(BaseModel):
     __tablename__ = "product_logs"
     id = db.Column(db.Integer(), primary_key=True, nullable=False)
     user_id = db.Column(
-        db.String(60), db.ForeignKey("user.id"), nullable=False, primary_key=True
+        db.String(60), db.ForeignKey("users.id"), nullable=False, primary_key=True
     )
     action = db.Column(db.String(20), nullable=False)
     product_id = db.Column(

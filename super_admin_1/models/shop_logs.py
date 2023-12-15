@@ -15,7 +15,7 @@ class ShopsLogs(db.Model):
 
     shop_id = db.Column(db.String(60), db.ForeignKey("shop.id"), nullable=False)
 
-    user_id = db.Column(db.String(60), db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(db.String(60), db.ForeignKey("users.id"), nullable=False)
 
     action = db.Column(db.String(20), nullable=False)
 
