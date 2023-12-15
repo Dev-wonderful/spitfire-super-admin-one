@@ -6,7 +6,7 @@ import uuid
 from flask import Blueprint, jsonify, request, abort #, send_file
 from super_admin_1 import db
 from super_admin_1.models.shop import Shop
-from super_admin_1.models.user import User
+from super_admin_1.models.user import Users
 from super_admin_1.shop.shoplog_helpers import ShopLogs
 from super_admin_1.models.product import Product
 import os
@@ -40,7 +40,7 @@ def create_user():
     for field in data_fields:
         if field not in request.get_json():
             abort(400)
-    user = User(**request.get_json())
+    user = Users(**request.get_json())
     db.session.add(user)
     db.session.commit()
     return jsonify(user.format()), 201

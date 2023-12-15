@@ -30,7 +30,7 @@ with Database() as cursor:
     try:
         # Construct the SQL query with placeholders
         insert_query = """
-       INSERT INTO shop (id, merchant_id, name, policy_confirmation,restricted, admin_status, is_deleted, reviewed,rating, createdAt, updatedAt)
+       INSERT INTO shop (id, merchant_id, name, policy_confirmation,restricted, admin_status, is_deleted, reviewed,rating, createdat, updatedAt)
        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         # Execute the SQL query with the provided data
@@ -44,7 +44,7 @@ with Database() as cursor:
             data["is_deleted"],
             data["reviewed"],
             data["rating"],
-            data["createdAt"],
+            data["createdat"],
             data["updatedAt"]
             # ... other data fields ...
         ))

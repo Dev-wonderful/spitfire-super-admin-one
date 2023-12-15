@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from super_admin_1.models.alternative import Database
 from super_admin_1 import db
 from super_admin_1.models.shop import Shop
+from super_admin_1.models.user import Users
 from super_admin_1.models.product import Product
 from super_admin_1.shop.shoplog_helpers import ShopLogs
 from super_admin_1.notification.notification_helper import notify
@@ -94,19 +95,21 @@ def get_shops(user_id : UUID) -> dict:
             shops = Shop.query.filter(
                 Shop.admin_status.in_(admin_status[status]),
                 getattr(Shop, status_enum[status]).in_(statuses[status])
-            ).order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)  
+            ).order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
+            print(f"status: {shops}") 
 
         elif search:
             shops = Shop.query.filter(Shop.name.ilike(f'%{search}%')).order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
 
         else:
             shops = sort_by_top_sales(page=page)
+            print(f"return: {shops}")
         data = []
     except Exception as error:
         return jsonify({
             "message": "Bad Request",
             "error": f"{error} is not recognized"
-        })
+        }), 400
 
 
     if isinstance(shops, list):
@@ -123,6 +126,7 @@ def get_shops(user_id : UUID) -> dict:
 
     try:
         for shop in shops:
+            # print(f"a shop: {shop}")
             total_products = Product.query.filter_by(shop_id=shop.id).count()
             merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
             joined_date = shop.createdAt.strftime("%d-%m-%Y")
@@ -130,11 +134,11 @@ def get_shops(user_id : UUID) -> dict:
                 "vendor_id": shop.id,
                 "vendor_name": shop.name,
                 "merchant_id": shop.merchant_id,
-                "merchant_name": merchant_name,
-                "merchant_email": shop.user.email,
-                "merchant_location": shop.user.location,
-                "merchant_country": shop.user.country,
-                "vendor_profile_pic": vendor_profile_image(shop.merchant_id),
+                # "merchant_name": merchant_name,
+                # "merchant_email": shop.user.email,
+                # "merchant_location": shop.user.location,
+                # "merchant_country": shop.user.country,
+                # "vendor_profile_pic": vendor_profile_image(shop.merchant_id),
                 "policy_confirmation": shop.policy_confirmation,
                 "restricted": shop.restricted,
                 "admin_status": shop.admin_status,

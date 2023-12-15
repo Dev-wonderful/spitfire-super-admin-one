@@ -98,7 +98,7 @@ def get_products(user_id : UUID) -> dict:
     try:
         for product in products:
             shop = Shop.query.filter_by(id=product.shop_id).first()
-            merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
+            # merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
             data = {
                 "product_image": image_gen(product.id),
                 "admin_status": product.admin_status,
@@ -120,7 +120,7 @@ def get_products(user_id : UUID) -> dict:
                 "updatedAt": product.updatedAt,
                 "product_status": check_product_status(product),
                 "shop_name": shop.name,
-                "vendor_name": merchant_name,
+                # "vendor_name": merchant_name,
                 "category_name": product.product_category.name,
                 "sub_category_name": product.product_category.product_sub_categories[0].name if product.product_category.product_sub_categories else ""
             }

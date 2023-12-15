@@ -11,7 +11,7 @@ class Product_category(BaseModel):
     __tablename__ = "product_category"
     updatedAt = None
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.String(60), db.ForeignKey( "user.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.String(60), db.ForeignKey( "users.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(225), nullable=False)
     # create a backref to Product
     products = db.relationship("Product", backref="product_category", cascade="all, delete")

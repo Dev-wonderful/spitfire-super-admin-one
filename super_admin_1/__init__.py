@@ -65,7 +65,9 @@ def create_app():
     app.register_blueprint(logs)
     app.register_blueprint(product)
     app.register_blueprint(notification)
-    app.register_blueprint(health)
+    # app.register_blueprint(health)
+
+    from super_admin_1.models.user import Users
 
     # create db tables from models if not exists
     with app.app_context():

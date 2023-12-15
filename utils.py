@@ -105,7 +105,7 @@ def vendor_profile_image(id: UUID) -> str:
         str: The profile picture URL of the user with the provided ID.
     """
     user_image = """
-        SELECT "profile_pic" FROM public.user
+        SELECT "profile_pic" FROM public.users
         WHERE id = %s
     """
     image_url = []
@@ -193,6 +193,7 @@ def shop_tuple_to_object(shop_tuple: tuple) -> SimpleNamespace:
         "location": shop_tuple[15],
         "country": shop_tuple[16]
     }
+    print(f"user_dict: {user_dict}")
     shop_dict: dict = {
         "id": shop_tuple[0],
         "merchant_id": shop_tuple[1],
@@ -203,7 +204,7 @@ def shop_tuple_to_object(shop_tuple: tuple) -> SimpleNamespace:
         "is_deleted": shop_tuple[6],
         "reviewed": shop_tuple[7],
         "rating": shop_tuple[8],
-        "createdAt": shop_tuple[9],
+        "createdat": shop_tuple[9],
         "updatedAt": shop_tuple[10],
         "user": SimpleNamespace(**user_dict)
     }
@@ -218,9 +219,9 @@ def total_shop_count(status: bool = False) -> int:
             SELECT COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales
             FROM shop
             LEFT JOIN public.order_item ON shop.merchant_id = public.order_item.merchant_id
-            LEFT JOIN public.user ON shop.merchant_id = public.user.id
+            LEFT JOIN public.users ON shop.merchant_id = public.users.id
             WHERE shop.restricted = 'no' AND shop.is_deleted = 'active'
-            GROUP BY shop.id, public.user.id
+            GROUP BY shop.id, public.users.id
             ORDER BY sales DESC;
         """
     else:
@@ -228,8 +229,8 @@ def total_shop_count(status: bool = False) -> int:
             SELECT COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales
             FROM shop
             LEFT JOIN public.order_item ON shop.merchant_id = public.order_item.merchant_id
-            LEFT JOIN public.user ON shop.merchant_id = public.user.id
-            GROUP BY shop.id, public.user.id
+            LEFT JOIN public.users ON shop.merchant_id = public.users.id
+            GROUP BY shop.id, public.users.id
             ORDER BY sales DESC;
         """
     try:
@@ -247,6 +248,7 @@ def sort_by_top_sales(page: int = 0, status: bool = False) -> List[SimpleNamespa
     Args:
         user_id (string): id of the logged in user
     """
+    print("entered")
     
     if page == 1:
         page = 0
@@ -256,35 +258,37 @@ def sort_by_top_sales(page: int = 0, status: bool = False) -> List[SimpleNamespa
     if status:
         # query to filter by active status
         query = """
-            SELECT shop.*, COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales, public.user.first_name, 
-            public.user.last_name, public.user.email, public.user.location, public.user.country
+            SELECT shop.*, COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales, public.users.first_name, 
+            public.users.last_name, public.users.email, public.users.location, public.users.country
             FROM shop
             LEFT JOIN public.order_item ON shop.merchant_id = public.order_item.merchant_id
-            LEFT JOIN public.user ON shop.merchant_id = public.user.id
+            LEFT JOIN public.users ON shop.merchant_id = public.users.id
             WHERE shop.restricted = 'no' AND shop.is_deleted = 'active'
-            GROUP BY shop.id, public.user.id
+            GROUP BY shop.id, public.users.id
             ORDER BY sales DESC
             LIMIT 10 OFFSET %s;
         """
     else:
         # query to filter generally by top sales
         query = """
-            SELECT shop.*, COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales, public.user.first_name, 
-            public.user.last_name, public.user.email, public.user.location, public.user.country
+            SELECT shop.*, COALESCE(SUM(order_price - order_discount + "order_VAT"), 0) AS sales, public.users.first_name, 
+            public.users.last_name, public.users.email, public.users.location, public.users.country
             FROM shop
             LEFT JOIN public.order_item ON shop.merchant_id = public.order_item.merchant_id
-            LEFT JOIN public.user ON shop.merchant_id = public.user.id
-            GROUP BY shop.id, public.user.id
+            LEFT JOIN public.users ON shop.merchant_id = public.users.id
+            GROUP BY shop.id, public.users.id
             ORDER BY sales DESC
             LIMIT 10 OFFSET %s;
         """
     try:
         with Database() as cursor:
             cursor.execute(query, (page,))
+            print("after")
             shops = cursor.fetchall()
-            # print(shops)
+            print(f"shops: {shops}")
     except Exception as error:
         logger.error(f"{type(error).__name__}: {error}")
+        # print("error")
         return []
 
 
