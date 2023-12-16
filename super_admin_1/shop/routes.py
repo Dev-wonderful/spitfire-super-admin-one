@@ -96,19 +96,19 @@ def get_shops(user_id : UUID) -> dict:
                 Shop.admin_status.in_(admin_status[status]),
                 getattr(Shop, status_enum[status]).in_(statuses[status])
             ).order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
-            print(f"status: {shops}") 
 
         elif search:
             shops = Shop.query.filter(Shop.name.ilike(f'%{search}%')).order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
 
         else:
-            shops = sort_by_top_sales(page=page)
-            print(f"return: {shops}")
+            # shops = sort_by_top_sales(page=page)
+            shops = Shop.query.order_by(Shop.createdAt.desc()).paginate(page=page, per_page=10, error_out=False)
         data = []
     except Exception as error:
+        logger.error(f"{type(error).__name__}: {error}")
         return jsonify({
             "message": "Bad Request",
-            "error": f"{error} is not recognized"
+            "error": f"request not recognized"
         }), 400
 
 
@@ -121,24 +121,42 @@ def get_shops(user_id : UUID) -> dict:
     else:
         total_shops = Shop.query.count()
         total_no_of_pages = shops.pages
-    banned_shops = Shop.query.filter(Shop.admin_status.in_(['suspended', 'blacklisted']), Shop.restricted == 'temporary').count()
-    deleted_shops = Shop.query.filter_by(is_deleted="temporary").count()
+    # This is to help in the modification of this number 
+    # when we encounter a bad data
+    total_number_of_each_status = {
+        "banned": 0,
+        "deleted": 0
+    }
+    total_number_of_each_status["banned"] = Shop.query.filter(
+        Shop.admin_status.in_(['suspended', 'blacklisted']), 
+        Shop.restricted == 'temporary'
+    ).count()
+    total_number_of_each_status["deleted"] = Shop.query.filter_by(is_deleted="temporary").count()
 
     try:
         for shop in shops:
             # print(f"a shop: {shop}")
             total_products = Product.query.filter_by(shop_id=shop.id).count()
-            merchant_name = f"{shop.user.first_name} {shop.user.last_name}"
+            user = getattr(shop, "user")
+            if user:
+                merchant_name = f"{user.first_name} {user.last_name}"
+            else:
+                total_shops -= 1
+                if total_number_of_each_status.get(status):
+                    total_number_of_each_status[status] -= 1
+                # hold on till I determine all relationships
+                # shop.delete()
+                continue
             joined_date = shop.createdAt.strftime("%d-%m-%Y")
             shop_data = {
                 "vendor_id": shop.id,
                 "vendor_name": shop.name,
                 "merchant_id": shop.merchant_id,
-                # "merchant_name": merchant_name,
-                # "merchant_email": shop.user.email,
-                # "merchant_location": shop.user.location,
-                # "merchant_country": shop.user.country,
-                # "vendor_profile_pic": vendor_profile_image(shop.merchant_id),
+                "merchant_name": merchant_name,
+                "merchant_email": user.email,
+                "merchant_location": user.location,
+                "merchant_country": user.country,
+                "vendor_profile_pic": vendor_profile_image(shop.merchant_id),
                 "policy_confirmation": shop.policy_confirmation,
                 "restricted": shop.restricted,
                 "admin_status": shop.admin_status,
@@ -157,9 +175,9 @@ def get_shops(user_id : UUID) -> dict:
                 "message": "all shops information", 
                 "data": data, 
                 "total_shops": total_shops,
-                "total_banned_shops": banned_shops, 
-                "total_deleted_shops": deleted_shops,
-                "total_pages": int(total_no_of_pages)
+                "total_banned_shops": total_number_of_each_status["banned"], 
+                "total_deleted_shops": total_number_of_each_status["deleted"],
+                "total_pages": int(total_no_of_pages) if len(data) > 10 else 1
                 }
         ), 200
     except Exception as e:
