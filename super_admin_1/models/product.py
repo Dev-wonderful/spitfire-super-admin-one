@@ -33,6 +33,8 @@ class Product(BaseModel):
         "user_product_rating.id"), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey(
         "product_category.id"))
+    
+    shop = db.relationship("Shop", back_populates="products", cascade="all, delete")
 
 
     def __init__(self, shop_id, rating_id, user_id, category_id, name, description, quantity, price, discount_price, tax, admin_status, is_deleted, currency, is_published=False):

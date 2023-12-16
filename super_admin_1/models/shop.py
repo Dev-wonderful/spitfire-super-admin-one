@@ -18,6 +18,8 @@ class Shop(BaseModel):
     rating = db.Column(db.Numeric(10, 2))
 
     user = db.relationship("Users", back_populates="shop", cascade="all, delete")
+    products = db.relationship("Product", back_populates="shop", cascade="all, delete")
+    logs = db.relationship("ShopsLogs", back_populates="shop", cascade="all, delete")
 
     
     def __init__(self, merchant_id, name, policy_confirmation, restricted, admin_status, is_deleted, reviewed, rating):

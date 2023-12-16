@@ -21,6 +21,8 @@ class ShopsLogs(db.Model):
 
     log_date = db.Column(db.DateTime(), default=datetime.utcnow, nullable=False)
 
+    shop = db.relationship("Shop", back_populates="logs", cascade="all, delete")
+
     def __init__(self, shop_id, user_id, action):
         self.shop_id = shop_id
 
